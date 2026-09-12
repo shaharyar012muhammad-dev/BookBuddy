@@ -33,3 +33,4 @@ EXPOSE 8080
 
 # Execute entrypoint script safely using sh
 CMD ["sh", "/var/www/html/docker-entrypoint.sh"]
+RUN apk add --no-cache netcat-openbsd
