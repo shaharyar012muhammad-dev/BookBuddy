@@ -21,6 +21,7 @@ WORKDIR /var/www/html
 
 # Copy all project code into container
 COPY . .
+RUN mkdir -p /var/www/html/storage && chmod 775 /var/www/html/storage
 
 # Install PHP dependencies (production, optimized autoloader)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
