@@ -4,10 +4,10 @@ set -e
 PORT="${PORT:-8080}"
 export PHP_CLI_SERVER_WORKERS="${PHP_CLI_SERVER_WORKERS:-4}"
 
-# ─── Debug: print actual env values ──────────────────────────────────────────
+# ─── Debug ────────────────────────────────────────────────────────────────────
 echo "==> MYSQLHOST=[${MYSQLHOST}] MYSQLPORT=[${MYSQLPORT}] MYSQLDATABASE=[${MYSQLDATABASE}]"
 
-# ─── Wait for MySQL using TCP check ──────────────────────────────────────────
+# ─── Wait for MySQL using netcat (Alpine compatible) ─────────────────────────
 if [ -n "$MYSQLHOST" ] && [ "$MYSQLHOST" != "localhost" ]; then
 
     echo "==> Waiting for MySQL at ${MYSQLHOST}:${MYSQLPORT:-3306}..."
@@ -15,7 +15,7 @@ if [ -n "$MYSQLHOST" ] && [ "$MYSQLHOST" != "localhost" ]; then
     MAX_TRIES=30
     TRIES=0
 
-    while ! (echo > /dev/tcp/${MYSQLHOST}/${MYSQLPORT:-3306}) 2>/dev/null; do
+    while ! nc -z "${MYSQLHOST}" "${MYSQLPORT:-3306}" 2>/dev/null; do
         TRIES=$((TRIES + 1))
         if [ "$TRIES" -ge "$MAX_TRIES" ]; then
             echo "==> MySQL not ready after ${MAX_TRIES} attempts, skipping seed..."
@@ -31,7 +31,7 @@ if [ -n "$MYSQLHOST" ] && [ "$MYSQLHOST" != "localhost" ]; then
     fi
 
 else
-    echo "==> MYSQLHOST is empty or localhost — skipping seed (check Railway variables!)"
+    echo "==> MYSQLHOST empty or localhost — skipping seed"
 fi
 
 # ─── Start PHP Server ─────────────────────────────────────────────────────────
