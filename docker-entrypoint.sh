@@ -4,30 +4,45 @@ set -e
 PORT="${PORT:-8080}"
 export PHP_CLI_SERVER_WORKERS="${PHP_CLI_SERVER_WORKERS:-4}"
 
-# ─── Debug ────────────────────────────────────────────────────────────────────
 echo "==> MYSQLHOST=[${MYSQLHOST}] MYSQLPORT=[${MYSQLPORT}] MYSQLDATABASE=[${MYSQLDATABASE}]"
 
-# ─── Wait for MySQL using netcat (Alpine compatible) ─────────────────────────
+# ─── Wait for MySQL using actual PDO connection ───────────────────────────────
 if [ -n "$MYSQLHOST" ] && [ "$MYSQLHOST" != "localhost" ]; then
 
-    echo "==> Waiting for MySQL at ${MYSQLHOST}:${MYSQLPORT:-3306}..."
+    echo "==> Waiting for MySQL to accept connections..."
 
     MAX_TRIES=30
     TRIES=0
+    MYSQL_READY=0
 
-    while ! nc -z "${MYSQLHOST}" "${MYSQLPORT:-3306}" 2>/dev/null; do
+    while [ $TRIES -lt $MAX_TRIES ]; do
         TRIES=$((TRIES + 1))
-        if [ "$TRIES" -ge "$MAX_TRIES" ]; then
-            echo "==> MySQL not ready after ${MAX_TRIES} attempts, skipping seed..."
+
+        RESULT=$(php -r "
+            try {
+                \$dsn = 'mysql:host=' . getenv('MYSQLHOST') . ';port=' . (getenv('MYSQLPORT') ?: '3306');
+                \$pdo = new PDO(\$dsn, getenv('MYSQLUSER'), getenv('MYSQLPASSWORD'));
+                echo 'ok';
+            } catch (Exception \$e) {
+                echo 'fail:' . \$e->getMessage();
+            }
+        " 2>/dev/null)
+
+        if [ "$RESULT" = "ok" ]; then
+            MYSQL_READY=1
+            echo "==> MySQL ready after ${TRIES} attempt(s)!"
             break
         fi
-        echo "==> Attempt ${TRIES}/${MAX_TRIES} — retrying in 2s..."
+
+        echo "==> Attempt ${TRIES}/${MAX_TRIES} — ${RESULT} — retrying in 2s..."
         sleep 2
     done
 
-    if [ "$TRIES" -lt "$MAX_TRIES" ]; then
-        echo "==> MySQL TCP open! Running seed/migration..."
+    if [ $MYSQL_READY -eq 1 ]; then
+        echo "==> Running seed/migration..."
         php seed.php || echo "==> Seed non-zero, continuing..."
+    else
+        echo "==> MySQL not ready after ${MAX_TRIES} attempts, skipping seed..."
     fi
 
 else
